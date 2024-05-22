@@ -1,87 +1,49 @@
-name: Lint and Autofix Code Base
+name: Lint Code Base
 
 on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
   schedule:
-    - cron: '0 0 * * *'  # Jalankan setiap hari pada pukul 00:00 UTC
+    - cron: '0 5 * * *'  # Jalankan setiap hari pukul 05:00 UTC
 
 jobs:
-  lint-and-autofix:
-    name: Lint and Autofix
+  super-lint:
+    name: Lint code base
     runs-on: ubuntu-latest
     permissions:
-      contents: write  
-      pull-requests: write  
+      contents: read
+      pull-requests: write
 
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-      - name: Super-Linter
-        uses: super-linter/super-linter@v6.5.0
+      - name: Run Super-Linter
+        uses: github/super-linter@v4
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
           VALIDATE_ALL_CODEBASE: false
           DEFAULT_BRANCH: main
-          FILTER_REGEX_INCLUDE: docker-compose.yml
-          LINTER_RULES_PATH: /
-          VALIDATE_DOCKERFILE: true
-          VALIDATE_DOCKER_COMPOSE: true
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FILTER_REGEX_INCLUDE: .*\.sh$  # Hanya periksa file Bash
+          VALIDATE_BASH: true
+          VALIDATE_MARKDOWN: true
           VALIDATE_YAML: true
           VALIDATE_JSON: true
-          VALIDATE_BASH: true
-          VALIDATE_PYTHON: false
-          VALIDATE_JAVASCRIPT_ES: false
-          VALIDATE_TYPESCRIPT_ES: false
-          VALIDATE_MARKDOWN: false
-          VALIDATE_XML: false
-          VALIDATE_KUBERNETES_KUSTOMIZATION: false
-          VALIDATE_KUBERNETES_HELM: false
-          VALIDATE_TERRAFORM: false
-          VALIDATE_ANSIBLE: false
-          VALIDATE_CLOUDFORMATION: false
-          VALIDATE_ARM_TEMPLATES: false
-          VALIDATE_BICEP: false
-          VALIDATE_ENV: false
-          VALIDATE_EDITORCONFIG: false
-          VALIDATE_GITHUB_ACTIONS: false
-          VALIDATE_GITHUB_WORKFLOW: false
-          VALIDATE_PERL: false
-          VALIDATE_RUBY: false
-          VALIDATE_PHP: false
-          VALIDATE_JAVA: false
-          VALIDATE_CSHARP: false
-          VALIDATE_DOCKER_HACK: false
-          VALIDATE_SQL: false
-          VALIDATE_GROOVY: false
-          VALIDATE_HTML: false
-          VALIDATE_CSS: false
-          VALIDATE_SCSS: false
-          VALIDATE_LESS: false
-          VALIDATE_GO: false
-          FIX_ERRORS: true 
+          VALIDATE_PYTHON: false  # Nonaktifkan linter Python
+          VALIDATE_DOCKERFILE: false  # Nonaktifkan linter Dockerfile
+          
+      - name: Check for modified files
+        id: check_files
+        uses: tj-actions/changed-files@v34
 
-      - name: Commit changes
-        if: ${{ steps.super-linter.outputs.has_changes }}
-        run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          git add .
-          git commit -m "Autofix by Super-Linter"
+      - name: Comment on PR
+        if: steps.check_files.outputs.any_changed == 'true' && github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          header: super-linter
+          message: |
+            Super-Linter telah menemukan beberapa masalah dalam kode Anda. Silakan periksa laporan lengkap dan perbaiki masalah yang ditemukan.
 
-      - name: Push changes
-        if: ${{ steps.super-linter.outputs.has_changes }}
-        uses: ad-m/github-push-action@master
-        with:
-          github_token: ${{ secrets.GH_TOKEN }} 
-      - name: Create Pull Request
-        if: ${{ steps.super-linter.outputs.has_changes }}
-        uses: peter-evans/create-pull-request@v5
-        with:
-          token: ${{ secrets.GH_TOKEN }} 
-          commit-message: "Autofix by Super-Linter"
-          title: "Autofix by Super-Linter"
-          body: "This pull request contains automatic fixes by Super-Linter."
-          branch: autofix/super-linter
-          base: main
